@@ -1,0 +1,530 @@
+\documentclass[a4paper]{article}
+\usepackage[a4paper]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[russian]{babel}
+\usepackage{listings}
+
+
+\usepackage{color} %% это для отображения цвета в коде
+\usepackage{listings} %% собственно, это и есть пакет listings
+
+\definecolor{gry}{rgb}{0.6,0.6,0.6}
+\usepackage{caption}
+\DeclareCaptionFont{white}{\color{white}} %% это сделает текст заголовка белым
+%% код ниже нарисует серую рамочку вокруг заголовка кода.
+\DeclareCaptionFormat{listing}{\colorbox{gry}{\parbox{\textwidth}{#1#2#3}}}
+\captionsetup[lstlisting]{format=listing,labelfont+=white,labelfont+=bf,textfont+=bf,textfont+=white}
+
+\lstset{ %
+language=C,                 % выбор языка для подсветки (здесь это С)
+basicstyle=\small\sffamily, % размер и начертание шрифта для подсветки кода
+numbers=left,               % где поставить нумерацию строк (слева\справа)
+numberstyle=\tiny,           % размер шрифта для номеров строк
+stepnumber=1,                   % размер шага между двумя номерами строк
+numbersep=5pt,                % как далеко отстоят номера строк от подсвечиваемого кода
+backgroundcolor=\color{white}, % цвет фона подсветки - используем \usepackage{color}
+showspaces=false,            % показывать или нет пробелы специальными отступами
+showstringspaces=false,      % показывать или нет пробелы в строках
+showtabs=false,             % показывать или нет табуляцию в строках
+frame=single,              % рисовать рамку вокруг кода
+tabsize=2,                 % размер табуляции по умолчанию равен 2 пробелам
+captionpos=t,              % позиция заголовка вверху [t] или внизу [b] 
+breaklines=true,           % автоматически переносить строки (да\нет)
+breakatwhitespace=false, % переносить строки только если есть пробел
+escapeinside={\%*}{*)}   % если нужно добавить комментарии в коде
+}
+\usepackage[T2A]{fontenc}
+\renewcommand{\lstlistingname}{Листинг}
+
+\title{Десять применений define-ов в языке Си}
+\date{20 февраля 2017 г.}
+\author{Микоян Филипп}
+
+\begin{document}		\pagenumbering{arabic}
+	\maketitle
+
+	\section{Краткое введение в макросы}
+	
+	\subsection{Терминология}
+	
+	\begin{description}
+	\item[•] \textbf{Препроцессор} - программа, обрабатывающая исходные файлы перед компиляцией. 
+	\item[•] \textbf{Директива} - указание. 
+	\item[•] \textbf{Макрос} - символьное имя, заменяемое препроцессором на последовательность символов, возможно зависящую от аргументов макроса. Макросы могут применяться для сокращения записи повторяющихся/мало отличающихся последовательностей инструкций.
+	\item[•] $\textbf{\#define}$ - директива препроцессору создать макрос, т.е. заменить все последующие употребления имени макроса на определённую последовательность символов.
+	\end{description}
+	
+	\subsection{Синтаксис}
+	
+	\begin{description}
+	\item[•]\textbf{Макрос без аргументов} \\
+			$\#define\ identifier\ token-stringopt$ \\
+				\begin{lstlisting}[caption={Пример применения макроса без аргументов}]
+#include <stdio.h>
+
+#define mew int
+
+int main(void)
+{
+    mew a = 5;
+    printf("%i", a/2); // 2 is to be printed
+    return 0;
+}
+				\end{lstlisting}
+			Этот пример, вероятно, не совсем безопасного применения макроса иллюстрирует, как можно 'переименовать' тип целочисленной переменной.
+			
+\newpage			
+			
+	\item[•]\textbf{Макрос с аргументами} \\
+		$\#define\ identifier\ (identifieropt1,\ ...,\ identifieroptn)\ token\_sequence$
+				\begin{lstlisting}[caption={Пример применения макроса с аргументами}]
+#include <stdio.h>
+
+#define sqr(x) ((x)*(x)) 
+
+int main(void)
+{
+    int a = 5;
+    printf("%i", sqr(a)); //25 is to be printed
+    return 0;
+}
+				\end{lstlisting}
+				В данном примере каждый \textit{'x'} из выражения $((x)*(x))$ непосредственно заменяется на то, что подаётся в макрос в качестве аргумента, будь то строка, выражение, символ, идентификатор, число и т.д. 
+	\end{description}
+	
+	\section{$\bf{Macros \approx Evil}$}
+	
+	Макросы следует использовать с осторожностью, придерживаясь следующих правил:
+	\begin{description}
+	\item[•] В названиях макросов употреблять только заглавные буквы, использовать префиксы, содержащие имя проекта и/или названия, потенциально редко применяемые остальными программистами
+	\item[•] Использовать макросы только если это оправдано, всегда задаваться вопросом о возможности замены макроса функцией
+	\item[•] Описывать макросы с простой реализацией
+	\item[•] Описывать только те макросы, которые не требуют отладки
+	\item[•] Избегать макросов, неявно что-либо изменяющих
+	\item[•] В случае необходимости описания больших макросов/макросов со сложной реализацией, обязательно снабжать их комментариями
+	\end{description}
+	В случае соблюдения вышеописанных правил, единственным серьёзным недостатком макросов можно назвать разве что "разбухание" исходного файла, обработанного препроцессором, и, как следствие, более длительную компиляцию и увеличение размера скомпилированной программы. 
+	
+\newpage	
+	
+	\section{Допустимые оправдания использования макросов}
+	
+	Макросы обладают несколькими достоинствами, которые, по моему мнению, могут являться единственным оправданием их использования. К ним относятся следующие особенности макросов(перечислены в порядке убывания важности):
+	\begin{description}
+	\item[•] Позволяют избежать копипаста
+	\item[•] Подчастую могут увеличить читабельность кода
+	\item[•] Позволяют узнать \textit{имя} переменной, переданной в макрос, а не только её значение
+	\item[•] Позволяют \textit{слить} два токена в один
+	\item[•] Инвариантность вида макроса относительно типов передаваемых в него аргументов (см. п.4.3)
+	\item[•] Используются при создании $\#include\ guard$-ов
+	\item[•] Вкупе с остальным функционалом препроцессора(в частности, include-ами) позволяет выносить некоторые описания в отдельные файлы, которые можно назвать конфигурационными
+	\item[•] Предописанные макросы бывают незаменимы
+	\item[•] При грамотном применении создают новый уровень абстракций(в Си позволяет следовать принципам Domain-driven design, имитировать Domain-specific language)
+	\end{description}
+	
+\newpage
+	
+	\section{Типичные 'use cases'(примеры применения) макросов}
+	
+	\subsection{'Пустые' макросы}
+	
+	\subsubsection{'Флажки' в исходном коде}
+	Бывает удобно использовать 'пустой' макрос, например, 'Govnocode', чтобы помечать в исходном коде те места, которые следует отрефакторить в первую очередь, и которые, в связи с близостью дедлайна, трудно написать хорошо сразу.
+	\begin{lstlisting}[caption={Govnocode}]
+#include <stdio.h>
+
+#define Govnocode 
+
+const int CONST1 = 666;
+const int CONST2 = 678;
+
+int main(void)
+{
+    char c = '\0';
+    while (!scanf("%c", &c));
+    switch (c)
+    {               Govnocode //Replace with macros
+        case '^':
+            {
+                printf("%d", CONST1 ^ CONST2);
+            }; break;
+        case '+':
+            {
+                printf("%d", CONST1 + CONST2);
+            }; break;
+        case '-':
+            {
+                printf("%d", CONST1 - CONST2);
+            }; break;
+        case '*':
+            {
+                printf("%d", CONST1 * CONST2);
+            }; break;
+        case '/':
+            {
+                printf("%d", CONST1 / CONST2);
+            }; break;
+        default: return 1;
+    }
+    return 0;
+}
+	\end{lstlisting}
+
+\newpage
+
+\subsubsection{$\textbf{\#include\ guards}$}
+
+\paragraph{$\textbf{\#include\ guard}$} - \ конструкция, используемая с целью избежать "двойное подключение" директивой $\#include$.
+	\begin{lstlisting}[caption={$\textbf{\#include\ guard}$}]
+#ifndef SUPER_HEADER_INCLUDED
+#define SUPER_HEARER_INCLUDED
+
+struct SuperStruct
+{
+    int superValue;
+    char superChar;
+};
+
+#endif
+	\end{lstlisting}
+	
+\subsubsection{Условная компиляция}
+
+\paragraph{Условная компиляция} - \ совокупность директив препроцессора, позволяющая компилировать или пропускать часть программы в зависимости от выполнения некоторого условия, в частности, от существования того или иного макроса. К директивам условной компиляции относятся $\textbf{\#ifdef},\ \textbf{\#ifndef},\ \textbf{\#else},\ \textbf{\#endif}$
+	\begin{lstlisting}[caption={Условная компиляция}]
+#include <stdio.h>
+
+//#define TEST_MODE
+//#define SILENT_MODE
+
+int main(void)
+{
+#ifndef SILENT_MODE
+
+#ifdef TEST_MODE
+    printf("Test mode");
+#else  //TEST_MODE
+    printf("Normal mode"); //This is to be printed
+#endif //TEST_MODE
+
+#endif //SILENT_MODE
+    return 0;
+}	
+	\end{lstlisting}
+	Следует отметить, что т.к. директивы условной компиляции обычно пишут без ведущих пробелов, т.е. без отступов, следует снабжать каждую директиву $\textbf{\#else},\ \textbf{\#endif}$ комментарием, указывающим, какой блок условной компиляции даннная директива закрывает. 
+	
+\newpage
+
+\subsection{Именование констант}
+
+	Зачастую начинающие программисты используют макросы для именования констант, к примеру:
+	\begin{lstlisting}[caption={Именованная константа}]
+#define MAX_STRING_LENGTH 256
+	\end{lstlisting}
+	Эта практика небезопасна, т.к. вместо числа '256' программист может случайно написать, к примеру, вызов функции, о чём впоследствии забыть. Это может привести к долгой, изнурительной и безрезультатной отладке, а потому вместо макросов в данном случае рекомендуется использовать enum. В случае, если несколько констант имеет смысл объединить в одну группу, следует поместить их в один enum.
+	\begin{lstlisting}[caption={Enums}]
+enum { MAX_STRING_LENGTH = 256 }; //Single constant
+
+enum STKERRORS //Block of constants
+{
+	STKERR_NULLPTR,
+	STKERR_NULLDATAPTR,
+	STKERR_NEGSIZE,
+};
+	\end{lstlisting}
+	
+\subsection{Макросы как функции}
+
+	Вообще говоря, макросы всегда нужно стараться заменить функциями, т.к. их проще отлаживать и они более безопасны.
+	Единственным обоснованием применения макросов вместо функций может являться то, что один и тот же макрос может принимать аргументы разных типов.
+\newpage
+	\begin{lstlisting}[caption={Macro Function}]
+#include <stdio.h>
+
+//#define DUMB_SQR
+
+#ifdef DUMB_SQR
+double sqrD(double a)
+{
+    return a * a;
+};
+
+int sqrI(int a)
+{
+    return a * a;
+};
+
+char sqrC(char a)
+{
+    return a * a;
+};
+#else
+ 
+#define sqr(a) ((a)*(a))
+
+#endif
+
+int main(void)
+{
+    printf("%i", sqr(5));
+    return 0;
+}
+	\end{lstlisting}
+	В данном подпункте следует особо отметить, что в макросах нужно ставить как можно больше скобок, учитывать все возможные значения аргументов. Это проиллюстрировано в следующем примере:
+		\begin{lstlisting}[caption={Wrong mul}]
+#include <stdio.h>
+
+#define mul(a, b) a * b //Wrong 'mul' macro - not enough brackets.
+
+const int CONST = 666;
+
+int main(void)
+{
+    printf("%i", mul(CONST + 5, 3)); //681 is to be printed, 2013 expected
+}
+	\end{lstlisting}
+	
+\newpage	
+	
+	\subsection{Макросы для получения имени переменной}
+	\begin{lstlisting}[caption={Получение имени переменной макросов}]
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+enum { MAX_STRING_LEN = 256 };
+
+struct Point
+{
+    double x;
+    double y;
+};
+
+void pointDump_(struct Point* point, const char pointName[MAX_STRING_LEN])
+{
+    assert(point);
+
+    printf("struct Point '%s' [%p]\n", pointName, point);
+    printf("{\n"
+           "\tx = %lg\n"
+           "\ty = %lg\n"
+           "}\n", point->x, point->y);
+}
+#define pointDump(pnt)                          \
+{                                               \
+    assert(strlen(#pnt) <= MAX_STRING_LENGTH);  \
+    pointDump_(pnt, #pnt);                      \
+}
+
+int main(void)
+{
+    struct Point* mySuperPoint = (struct Point*)calloc(1, sizeof(*mySuperPoint));
+    pointDump(mySuperPoint);
+    return 0;
+}
+	\end{lstlisting} 
+	В данном примере ($\#pnt$) - строковое представление переданного в макрос параметра. \\
+	\textbf{Вывод программы Point dump.c:} \\ \\
+\begin{tabular}{|l}
+struct Point 'mySuperPoint' [0x55fa8e58b010] \\
+\{ \\
+\ \ \ \ x = 0\\
+\ \ \ \ y = 0\\
+\}
+\end{tabular} \\
+Обратите внимание на обратные слэши в конце каждой строки в описании макроса. Они используются для описания многострочных макросов. Их нужно ставить в конце строки(обратите внимание, что после них не должны стоять даже пробелы), которую необходимо перенести.
+
+\newpage
+
+\subsection{Макросы для склейки токенов}
+	\begin{lstlisting}[caption={Склейка токенов макросами}]
+int compare_chicks(const void *chick1, const void *chick2)
+{
+    #define boobs(i)   (*((const int **)chick##i)) [0]
+    #define waist(i)   (*((const int **)chick##i)) [1]
+    #define hippies(i) (*((const int **)chick##i)) [2]
+    #define sum(i)     (boobs(i) + waist(i) + hippies(i))
+    
+    int sum1 = sum(1);
+    int sum2 = sum(2);
+    
+    int firstChickIsBest = (sum1 < sum2);
+
+    if (sum1 == sum2)
+    {
+        firstChickIsBest = boobs(1) > boobs(2);
+        if (boobs(1) == boobs(2))
+        {
+            firstChickIsBest = waist(1) < waist(2);
+            if (waist(1) == waist(2))
+            {
+                firstChickIsBest = hippies(1) > hippies(2);
+            }
+        }
+    }
+    
+    return !firstChickIsBest;
+    
+    #undef sum
+    #undef boobs
+    #undef waist
+    #undef hippies
+}
+	\end{lstlisting} 
+	В данном примере особое внимание следует обратить на двойные решётки('$\#\#$') в описаниях макросов. Если бы их не было, препроцессор воспринял бы последовательность символов \textit{chicki} как идентификатор и напрямую заменял бы, скажем, \textit{waist(0)} на \textit{(*((const int **)chicki)) [1]}, т.е. это выражение даже не зависело бы от передаваемого параметра. \\
+	С помощью двойной решётки мы указываем компилятору, что эти две последовательности символов(\textit{chick} и \textit{i}) следует сначала проверить на необходимость замены на аргументы, а затем 'склеить'.\\
+	Также следует отметить присутствие директив препроцессору $\#undef$. Эти директивы используются для ограничения области видимости макросов. Их обязательно следует ставить там, где кончается область видимости макроса. \\
+	Отмечу также, что чем шире область видимости макросов, тем 'привередливей' следует относиться к их названиям, и наоборот.
+	
+\newpage
+
+\subsection{Макросы для замены однотипных case-ов и функций}
+
+	\begin{lstlisting}[caption={Switch and macros}]
+#include <stdio.h>
+
+const int CONST1 = 666;
+const int CONST2 = 678;
+
+int main(void)
+{
+    char c = '\0';
+    while (!scanf("%c", &c));
+    
+#define caseOperator(operChar, oper)      \
+case operChar:                            \
+    {                                     \
+        printf("%d", CONST1 oper CONST2); \
+    }; break;
+
+    switch (c)
+    {
+  	    caseOperator('^', ^);
+  	    caseOperator('+', +);
+  	    caseOperator('-', -);
+  	    caseOperator('*', *);
+        caseOperator('/', /);
+        default: return 1;
+    }
+    
+#undef caseOperator
+    return 0;
+}
+	\end{lstlisting}
+Этот пример представляет собой переделанный Листинг 3 из пункта 4.1.1. \\ 
+
+В данном листинге хорошо проиллюстрировано, как можно использовать макросы для устранения копипаста - переписывания/копирования участка кода в разные части программы. Метод состоит в следующем: создаётся макрос, целиком содержащий в себе этот участок кода. Если этот участок в зависимости от той части программы, в которую его нужно вставить, слегка изменяется, то эти изменения производятся путём введения аргументов макроса, отличающихся в разных частях программы.
+
+\newpage
+
+	\begin{lstlisting}[caption={Functions and macros}]
+#include <stdio.h>
+
+#define sqrFunc(varType)          \
+varType sqr_##varType(varType a); \
+                                  \
+varType sqr_##varType(varType a)  \
+{                                 \
+    return a * a;                 \
+};                                
+
+sqrFunc(double)
+sqrFunc(int)
+sqrFunc(char)
+
+#undef sqrFunc
+
+int main(void)
+{
+    printf("%i", sqr_int(5));
+    return 0;
+}
+	\end{lstlisting} 
+Данный пример представляет собой переделанный Листинг 8 из пункта 4.3. \\
+
+Кроме приведённых примеров к данному пункту также можно отнести, например, применение макросов для описания похожих функций, отличающихся лишь наборов передаваемых в них параметров. \\
+
+
+
+\subsection{Макросы, описанные в отдельных($\approx$ конфигурационных) файлах}
+
+
+	\begin{lstlisting}[caption={Файл Enums.h, использующий макросы, описанные в Keywords.h}]
+#ifndef ENUMS_H_INCLUDED
+#define ENUMS_H_INCLUDED
+
+enum LangKeyword 
+{
+    #define LANG_KEYWORDS
+    
+    #define LANG_KEYWORD(keywd, type) LANGKWD_##keywd,
+    #include "Keywords.h"
+    #undef LANG_KEYWORD
+    
+    #undef LANG_KEYWORDS
+    LANGKWD_KWDQT,
+};
+
+
+
+enum LangKeywordType
+{
+    #define LANG_TYPES
+    
+    #define LANG_TYPE(type) LANGKWT_##type,
+    #include "Keywords.h"
+    #undef LANG_TYPE
+    
+    #undef LANG_TYPES
+};
+
+#endif
+	\end{lstlisting} 
+	\begin{lstlisting}[caption={Файл, использующий макросы, описанные в Keywords.h}]
+#ifdef LANG_MATH_OPERATORS 
+//  LANG_MATH_OP( name, char, priority )
+//+-------------------------------------------+
+    LANG_MATH_OP( ln    , 'l', 0            )
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//--------------------------------------------
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    LANG_MATH_OP( minus , '-', 3            )
+//+-------------------------------------------+
+#endif
+
+#ifdef LANG_KEYWORDS
+//+-------------------------------------------+
+//  LANG_KEYWORD( keyword,  keyword_type     )
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//--------------------------------------------
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    LANG_KEYWORD( while,    loop             )
+//+-------------------------------------------+ 
+#endif
+
+#ifdef LANG_TYPES
+//+-------------------------------------------+
+//  LANG_TYPE( type             )
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//--------------------------------------------
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    LANG_TYPE( function         )
+//+-------------------------------------------+
+#endif
+\end{lstlisting} 
+\subsection{Getter и setter, реализованные с помощью макросов}
+	 
+\newpage	 
+	 
+\section{Опция -E}
+
+	Отдельный заголовок хотелось бы выделить, чтобы обратить внимание читателя на опцию компилятора '-E', которая позволяет увидеть исходные файлы такими, какими они стали после обработки препроцессором, т.е. со всеми 'раскрытыми' '$\#define$-ами и $\#include$-ами. \\
+
+	Начинающему пользователю макросов настоятельно рекомендуется воспользоваться данной опцией и изучить возвращённые препроцессором файлы. Также бывает очень полезно воспользоваться данной опцией при неожиданном и необъяснимом поведении программы, в которой, возможно, построена чересчур сложная система макросов.
+	
+\end{document}
